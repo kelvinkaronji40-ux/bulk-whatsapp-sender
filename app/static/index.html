@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Contacts — Bulk WhatsApp Sender</title>
+  <style>
+    :root { --bg:#0f172a; --surface:#1e293b; --surface2:#334155; --text:#f8fafc; --muted:#94a3b8; --accent:#0ea5e9; }
+    body { font-family: Inter, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; }
+    header { padding: 16px 20px; border-bottom: 1px solid #334155; display:flex; justify-content:space-between; align-items:center; }
+    main { padding: 20px; max-width: 980px; margin: 0 auto; }
+    .toolbar { display:flex; gap:10px; flex-wrap:wrap; margin: 14px 0; }
+    .btn { background: var(--accent); color:#fff; border:0; padding:10px 14px; border-radius:10px; cursor:pointer; font-weight:600; }
+    .btn-secondary { background: var(--surface2); }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align:left; padding:10px; border-bottom: 1px solid #334155; }
+    th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .muted { color: var(--muted); }
+    .hidden { display:none; }
+    input, select { background: var(--surface); color: var(--text); border:1px solid #334155; padding:10px; border-radius:10px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1 style="margin:0;font-size:18px;">Contacts</h1>
+      <p class="muted" style="margin:4px 0 0;">Manage your WhatsApp contact list</p>
+    </div>
+    <nav>
+      <a href="/">Dashboard</a>
+      &nbsp;|&nbsp;
+      <a href="/static/campaigns.html">Campaigns</a>
+    </nav>
+  </header>
+  <main>
+    <div class="toolbar">
+      <input id="search" placeholder="Search contacts..." />
+      <input type="file" id="csv" accept=".csv" />
+      <button class="btn" id="import">Import CSV</button>
+      <button class="btn btn-secondary" id="export">Export CSV</button>
+      <button class="btn" id="add">+ Add Contact</button>
+    </div>
+    <div class="toolbar hidden" id="add-form">
+      <input id="name" placeholder="Name" />
+      <input id="phone" placeholder="Phone" />
+      <input id="source" placeholder="Source" />
+      <button class="btn" id="save">Save</button>
+      <button class="btn btn-secondary" id="cancel">Cancel</button>
+    </div>
+    <table>
+      <thead><tr><th>Name</th><th>Phone</th><th>Source</th><th>Added</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </main>
+  <script>
+    async function load() {
+      const q = document.getElementById('search').value.toLowerCase();
+      const res = await fetch('/contacts/');
+      const all = await res.json();
+      const filtered = all.filter(c => `${c.name||''} ${c.phone}`.toLowerCase().includes(q));
+      document.getElementById('rows').innerHTML = filtered.map(c => `<tr><td>${escape(c.name||'')}</td><td>${escape(c.phone)}</td><td>${escape(c.source||'')}</td><td class="muted">${new Date(c.created_at).toLocaleString()}</td></tr>`).join('');
+    }
+    function escape(s){ if(typeof s!=='string') return ''; return s.replace(/[&<>'"]/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','\'':'&#39;','"':'&quot;' }[m])); }
+    document.getElementById('search').addEventListener('input', load);
+    document.getElementById('add').onclick = () => document.getElementById('add-form').classList.remove('hidden');
+    document.getElementById('cancel').onclick = () => document.getElementById('add-form').classList.add('hidden');
+    document.getElementById('save').onclick = async () => {
+      const phone = document.getElementById('phone').value.trim();
+      if (!phone) return alert('Phone required');
+      await fetch('/contacts/', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ phone, name: document.getElementById('name').value, source: document.getElementById('source').value }) });
+      document.getElementById('add-form').classList.add('hidden');
+      load();
+    };
+    document.getElementById('import').onclick = async () => {
+      const file = document.getElementById('csv').files[0];
+      if (!file) return alert('Choose CSV');
+      const fd = new FormData(); fd.append('file', file);
+      const res = await fetch('/contacts/import-csv', { method:'POST', body: fd });
+      const data = await res.json();
+      alert(`Imported: ${data.imported}, Skipped: ${data.skipped}, Duplicates: ${data.duplicates}`);
+      load();
+    };
+    document.getElementById('export').onclick = () => { window.location.href = '/contacts/export-csv'; };
+    document.addEventListener('DOMContentLoaded', load);
+  </script>
+</body>
+</html>
