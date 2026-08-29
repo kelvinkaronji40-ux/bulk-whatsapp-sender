@@ -162,6 +162,7 @@
       </div>
       <div id="template-list"></div>
       <div id="templates-empty" class="empty hidden">No templates yet. Create one above.</div>
+      <p class="muted" style="font-size:12px;margin-top:10px;">🟢 Approved templates can be used in campaigns. Pending/rejected templates need action.</p>
     </section>
 
     <!-- Settings -->
@@ -203,6 +204,19 @@
         <p class="muted" style="font-size:12px;margin-top:10px;">These credentials are stored in the app database and used to send messages and submit templates to Meta.</p>
       </div>
     </section>
+
+    <!-- AI Modal -->
+    <div id="ai-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:1000;">
+      <div class="card" style="width:100%;max-width:520px;margin:0;">
+        <h3 style="margin:0 0 10px;">✨ AI Write</h3>
+        <p class="muted" style="font-size:12px;margin-bottom:10px;">Describe what you want the AI to write.</p>
+        <textarea id="ai-prompt" rows="4" placeholder="Example: Order confirmation for {{1}} with delivery at {{2}}"></textarea>
+        <div class="toolbar" style="margin-top:12px;">
+          <button class="btn btn-success" id="ai-submit">Generate</button>
+          <button class="btn btn-secondary" id="ai-cancel">Cancel</button>
+        </div>
+      </div>
+    </div>
   </main>
 
   <footer>
@@ -213,7 +227,7 @@
     const API = '';
     const $ = id => document.getElementById(id);
 
-    function escape(s){ if(typeof s!=='string') return ''; return s.replace(/[&<>'\"]/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','\'':'&#39;','"':'&quot;' }[m])); }
+    function escape(s){ if(typeof s!=='string') return ''; return s.replace(/[&<>'\\"]/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','\'':'&#39;','"':'&quot;' }[m])); }
     function badge(status){
       const map = { draft:'badge-draft', sent:'badge-sent', failed:'badge-failed', pending:'badge-pending', queued:'badge-draft', submitted:'badge-pending', approved:'badge-sent', rejected:'badge-failed' };
       return `<span class="badge ${map[status]||'badge-draft'}">${escape(status)}</span>`;
@@ -364,6 +378,29 @@
     };
     $('load-settings').onclick = loadSettings;
 
+    let aiContext = 'campaign';
+    async function openAiModal(context){
+      aiContext = context;
+      $('ai-prompt').value = '';
+      $('ai-modal').classList.remove('hidden');
+      setTimeout(() => $('ai-prompt').focus(), 50);
+    }
+    $('ai-cancel').onclick = () => $('ai-modal').classList.add('hidden');
+    $('ai-submit').onclick = async () => {
+      const prompt = $('ai-prompt').value.trim();
+      if(!prompt) return alert('Enter a prompt');
+      $('ai-submit').disabled = true;
+      try {
+        const text = await aiGenerate(prompt, aiContext);
+        if(aiContext === 'campaign') $('camp-body').value = text;
+        else $('tpl-body').value = text;
+        $('ai-modal').classList.add('hidden');
+      } catch(e) { alert(e.message); }
+      $('ai-submit').disabled = false;
+    };
+    $('ai-campaign').onclick = () => openAiModal('campaign');
+    $('ai-template').onclick = () => openAiModal('template');
+
     async function aiGenerate(prompt, context){
       const provider = $('cfg-ai-provider').value;
       const res = await fetch('/ai/generate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prompt, context, provider }) });
@@ -371,26 +408,6 @@
       if(!res.ok) throw new Error(data.detail || 'AI generation failed');
       return data.text;
     }
-    $('ai-campaign').onclick = async () => {
-      const prompt = prompt('Describe your campaign message:\nExample: 20% off shoes this weekend for VIP customers');
-      if(!prompt) return;
-      $('ai-campaign').disabled = true;
-      try {
-        const text = await aiGenerate(prompt, 'campaign');
-        $('camp-body').value = text;
-      } catch(e) { alert(e.message); }
-      $('ai-campaign').disabled = false;
-    };
-    $('ai-template').onclick = async () => {
-      const prompt = prompt('Describe the template message:\nExample: Order confirmation for {{1}} with delivery at {{2}}');
-      if(!prompt) return;
-      $('ai-template').disabled = true;
-      try {
-        const text = await aiGenerate(prompt, 'template');
-        $('tpl-body').value = text;
-      } catch(e) { alert(e.message); }
-      $('ai-template').disabled = false;
-    };
 
     document.addEventListener('DOMContentLoaded', () => show('dashboard'));
   </script>
