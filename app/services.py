@@ -11,11 +11,18 @@ import httpx
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import Settings
+from app.config import Settings, load_settings_from_db
 from app.models import Campaign, CampaignContact, Contact
 
 
-settings = Settings.load()
+async def _get_settings(session: AsyncSession) -> Settings:
+    env_settings = Settings.load()
+    db_settings = await load_settings_from_db(session)
+    if db_settings.whatsapp_phone_number_id:
+        env_settings.whatsapp_phone_number_id = db_settings.whatsapp_phone_number_id
+    if db_settings.whatsapp_access_token:
+        env_settings.whatsapp_access_token = db_settings.whatsapp_access_token
+    return env_settings
 
 
 def _normalize_phone(raw: str) -> str | None:
@@ -31,7 +38,8 @@ def _normalize_phone(raw: str) -> str | None:
     return digits
 
 
-async def _send_whatsapp_text(phone: str, body: str) -> tuple[bool, str | None]:
+async def _send_whatsapp_text(session: AsyncSession, phone: str, body: str) -> tuple[bool, str | None]:
+    settings = await _get_settings(session)
     if not settings.whatsapp_phone_number_id or not settings.whatsapp_access_token:
         return False, "missing_whatsapp_config"
     url = f"https://graph.facebook.com/v19.0/{settings.whatsapp_phone_number_id}/messages"
@@ -172,7 +180,7 @@ async def send_campaign(session: AsyncSession, campaign_id: int, limit: int | No
             cc.error = "opted_out"
             skipped += 1
             continue
-        ok, err = await _send_whatsapp_text(contact.phone, campaign.body_text)
+        ok, err = await _send_whatsapp_text(session, contact.phone, campaign.body_text)
         cc.sent_at = datetime.utcnow()
         if ok:
             cc.status = "sent"

@@ -58,3 +58,15 @@ class TemplateOut(TemplateIn):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AppConfigIn(BaseModel):
+    whatsapp_phone_number_id: str
+    whatsapp_access_token: str
+
+
+class AppConfigOut(AppConfigIn):
+    id: int
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

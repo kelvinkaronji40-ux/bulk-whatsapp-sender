@@ -7,7 +7,7 @@ from sqlalchemy import select, func
 from app.database import get_session
 from app.models import Contact, Campaign, CampaignContact
 from app.schemas import ContactIn, ContactOut, CampaignIn, CampaignOut, CampaignDetail, CSVUploadResponse
-from app.services import import_contacts_csv, create_campaign, add_recipients_to_campaign, send_campaign
+from app.services import import_contacts_csv, create_campaign, add_recipients_to_campaign, send_campaign, _normalize_phone
 
 router = APIRouter(prefix="/contacts", tags=["contacts"])
 

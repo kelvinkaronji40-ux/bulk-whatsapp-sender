@@ -57,6 +57,7 @@
       <a onclick="show('contacts')" id="nav-contacts">Contacts</a>
       <a onclick="show('campaigns')" id="nav-campaigns">Campaigns</a>
       <a onclick="show('templates')" id="nav-templates">Templates</a>
+      <a onclick="show('settings')" id="nav-settings">Settings</a>
     </nav>
   </header>
 
@@ -160,6 +161,23 @@
       <div id="template-list"></div>
       <div id="templates-empty" class="empty hidden">No templates yet. Create one above.</div>
     </section>
+
+    <!-- Settings -->
+    <section id="page-settings" class="hidden">
+      <h1 class="section-title">Settings</h1>
+      <p class="section-desc">Configure your WhatsApp API credentials</p>
+      <div class="card">
+        <div style="display:grid;gap:12px;margin-top:12px;">
+          <input id="cfg-phone" placeholder="WhatsApp Phone Number ID" />
+          <input id="cfg-token" placeholder="Access Token" type="password" />
+        </div>
+        <div class="toolbar" style="margin-top:14px;">
+          <button class="btn" id="save-settings">Save Settings</button>
+          <button class="btn btn-secondary" id="load-settings">Reload Saved</button>
+        </div>
+        <p class="muted" style="font-size:12px;margin-top:10px;">These credentials are stored in the app database and used to send messages and submit templates to Meta.</p>
+      </div>
+    </section>
   </main>
 
   <footer>
@@ -177,7 +195,7 @@
     }
 
     function show(page){
-      ['dashboard','contacts','campaigns','templates'].forEach(p => {
+      ['dashboard','contacts','campaigns','templates','settings'].forEach(p => {
         $('page-'+p).classList.toggle('hidden', p!==page);
         $('nav-'+p).classList.toggle('active', p===page);
       });
@@ -185,6 +203,7 @@
       if(page==='contacts') loadContacts();
       if(page==='campaigns') loadCampaigns();
       if(page==='templates') loadTemplates();
+      if(page==='settings') loadSettings();
     }
 
     async function loadDashboard(){
@@ -300,6 +319,18 @@
       if(res.ok){ alert('Submitted to Meta!'); $('tpl-name').value=$('tpl-body').value=$('tpl-header').value=$('tpl-footer').value=''; $('template-form').classList.add('hidden'); loadTemplates(); }
       else { alert('Error: ' + JSON.stringify(data.detail||data)); }
     };
+
+    async function loadSettings(){
+      const data = await fetch('/settings/whatsapp').then(r=>r.json());
+      $('cfg-phone').value = data.whatsapp_phone_number_id || '';
+      $('cfg-token').value = data.whatsapp_access_token || '';
+    }
+    $('save-settings').onclick = async () => {
+      const payload = { whatsapp_phone_number_id: $('cfg-phone').value.trim(), whatsapp_access_token: $('cfg-token').value.trim() };
+      await fetch('/settings/whatsapp', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      alert('Settings saved');
+    };
+    $('load-settings').onclick = loadSettings;
 
     document.addEventListener('DOMContentLoaded', () => show('dashboard'));
   </script>
