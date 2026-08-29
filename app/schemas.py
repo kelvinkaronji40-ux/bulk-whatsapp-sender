@@ -63,10 +63,24 @@ class TemplateOut(TemplateIn):
 class AppConfigIn(BaseModel):
     whatsapp_phone_number_id: str
     whatsapp_access_token: str
+    ai_provider: Optional[str] = None
+    ai_api_key: Optional[str] = None
 
 
 class AppConfigOut(AppConfigIn):
     id: int
     updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AIGenerateIn(BaseModel):
+    prompt: str
+    context: str = "campaign"  # campaign | template
+    provider: Optional[str] = None
+
+
+class AIGenerateOut(BaseModel):
+    text: str
 
     model_config = ConfigDict(from_attributes=True)

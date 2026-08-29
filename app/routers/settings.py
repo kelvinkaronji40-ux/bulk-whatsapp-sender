@@ -12,12 +12,19 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 
 @router.get("/whatsapp", response_model=AppConfigOut)
 async def get_whatsapp_settings(session: AsyncSession = Depends(get_session)):
-    rows = (await session.execute(select(AppConfig).where(AppConfig.key.in_(["whatsapp_phone_number_id", "whatsapp_access_token"])))).scalars().all()
+    rows = (await session.execute(select(AppConfig).where(AppConfig.key.in_([
+        "whatsapp_phone_number_id",
+        "whatsapp_access_token",
+        "ai_provider",
+        "ai_api_key",
+    ])))).scalars().all()
     vals = {r.key: r.value for r in rows}
     return AppConfigOut(
         id=1,
         whatsapp_phone_number_id=vals.get("whatsapp_phone_number_id", ""),
         whatsapp_access_token=vals.get("whatsapp_access_token", ""),
+        ai_provider=vals.get("ai_provider"),
+        ai_api_key=vals.get("ai_api_key"),
         updated_at=datetime.utcnow(),
     )
 
@@ -27,7 +34,11 @@ async def update_whatsapp_settings(payload: AppConfigIn, session: AsyncSession =
     for key, value in [
         ("whatsapp_phone_number_id", payload.whatsapp_phone_number_id),
         ("whatsapp_access_token", payload.whatsapp_access_token),
+        ("ai_provider", payload.ai_provider),
+        ("ai_api_key", payload.ai_api_key),
     ]:
+        if value is None:
+            continue
         row = (await session.execute(select(AppConfig).where(AppConfig.key == key))).scalar_one_or_none()
         if row:
             await session.execute(update(AppConfig).where(AppConfig.key == key).values(value=value))
@@ -38,5 +49,7 @@ async def update_whatsapp_settings(payload: AppConfigIn, session: AsyncSession =
         id=1,
         whatsapp_phone_number_id=payload.whatsapp_phone_number_id,
         whatsapp_access_token=payload.whatsapp_access_token,
+        ai_provider=payload.ai_provider,
+        ai_api_key=payload.ai_api_key,
         updated_at=datetime.utcnow(),
     )
