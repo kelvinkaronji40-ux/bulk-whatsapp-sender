@@ -56,6 +56,32 @@ async def _send_whatsapp_text(phone: str, body: str) -> tuple[bool, str | None]:
         return False, str(e)
 
 
+async def create_meta_template(name: str, language: str, category: str, body: str, header: str | None = None, footer: str | None = None) -> tuple[bool, dict | str]:
+    if not settings.whatsapp_phone_number_id or not settings.whatsapp_access_token:
+        return False, "missing_whatsapp_config"
+    url = f"https://graph.facebook.com/v19.0/{settings.whatsapp_phone_number_id}/message_templates"
+    headers = {"Authorization": f"Bearer {settings.whatsapp_access_token}", "Content-Type": "application/json"}
+    payload: dict[str, Any] = {
+        "name": name,
+        "language": language,
+        "category": category,
+        "components": [{"type": "body", "text": body}],
+    }
+    if header:
+        payload["components"].insert(0, {"type": "header", "format": "TEXT", "text": header})
+    if footer:
+        payload["components"].append({"type": "footer", "text": footer})
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            r = await client.post(url, json=payload, headers=headers)
+            data = r.json()
+            if r.status_code >= 400:
+                return False, data.get("error", {}).get("message", str(data))
+            return True, data
+    except Exception as e:
+        return False, str(e)
+
+
 async def import_contacts_csv(session: AsyncSession, content: bytes) -> dict[str, int]:
     text = content.decode("utf-8", errors="ignore")
     reader = csv.DictReader(io.StringIO(text))
