@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -5,12 +6,13 @@ from app.database import init_db
 from app.routers import contacts, campaigns
 
 
-app = FastAPI(title="Bulk WhatsApp Sender", version="0.1.0")
-
-
-@app.on_event("startup")
-async def on_startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     await init_db()
+    yield
+
+
+app = FastAPI(title="Bulk WhatsApp Sender", version="0.1.0", lifespan=lifespan)
 
 
 app.include_router(contacts.router)
