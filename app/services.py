@@ -36,11 +36,14 @@ async def _send_whatsapp_text(phone: str, body: str) -> tuple[bool, str | None]:
         return False, "missing_whatsapp_config"
     url = f"https://graph.facebook.com/v19.0/{settings.whatsapp_phone_number_id}/messages"
     headers = {"Authorization": f"Bearer {settings.whatsapp_access_token}"}
+    text = body.rstrip()
+    if not text.endswith("Tisement Media"):
+        text += "\n\n- Powered by Tisement Media"
     payload = {
         "messaging_product": "whatsapp",
         "to": phone,
         "type": "text",
-        "text": {"body": body},
+        "text": {"body": text},
     }
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
