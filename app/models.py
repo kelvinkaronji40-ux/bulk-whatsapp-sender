@@ -40,3 +40,18 @@ class CampaignContact(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Template(Base):
+    __tablename__ = "templates"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    language: Mapped[str] = mapped_column(String(16), default="en_US")
+    category: Mapped[str] = mapped_column(String(32), default="MARKETING")
+    body: Mapped[str] = mapped_column(Text)
+    header: Mapped[str | None] = mapped_column(Text, nullable=True)
+    footer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="draft")
+    meta_template_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

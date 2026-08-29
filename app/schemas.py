@@ -41,3 +41,20 @@ class CSVUploadResponse(BaseModel):
     imported: int
     skipped: int
     duplicates: int
+
+
+class TemplateIn(BaseModel):
+    name: str
+    language: str = "en_US"
+    category: str = "MARKETING"
+    body: str
+    header: Optional[str] = None
+    footer: Optional[str] = None
+
+
+class TemplateOut(TemplateIn):
+    id: int
+    status: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

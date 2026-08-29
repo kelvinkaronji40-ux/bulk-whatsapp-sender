@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from app.database import init_db
-from app.routers import contacts, campaigns
+from app.routers import contacts, campaigns, templates
 
 
 @asynccontextmanager
@@ -18,6 +18,7 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 app.include_router(contacts.router)
 app.include_router(campaigns.router)
+app.include_router(templates.router)
 
 
 @app.get("/", response_class=HTMLResponse)
