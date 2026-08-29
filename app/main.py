@@ -50,6 +50,9 @@ async def root():
       <div class="card"><h3>API Docs</h3><p>REST API reference</p><a href="/docs">Open API</a></div>
     </div>
   </main>
+  <footer style="padding:18px 24px;text-align:center;color:#94a3b8;font-size:12px;border-top:1px solid #334155;margin-top:24px;">
+    Powered by <a href="https://tisementmedia.com" target="_blank" style="color:#0ea5e9;text-decoration:none;">Tisement Media</a> • Bulk WhatsApp Sender
+  </footer>
 </body>
 </html>
 """
