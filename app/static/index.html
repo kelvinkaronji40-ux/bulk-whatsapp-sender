@@ -3,88 +3,305 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Contacts — Bulk WhatsApp Sender</title>
+  <title>Bulk WhatsApp Sender</title>
   <style>
-    :root { --bg:#0f172a; --surface:#1e293b; --surface2:#334155; --text:#f8fafc; --muted:#94a3b8; --accent:#0ea5e9; }
+    :root { --bg:#0f172a; --surface:#1e293b; --surface2:#334155; --text:#f8fafc; --muted:#94a3b8; --accent:#0ea5e9; --success:#10b981; --danger:#ef4444; --warn:#f59e0b; }
+    * { box-sizing: border-box; }
     body { font-family: Inter, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; }
-    header { padding: 16px 20px; border-bottom: 1px solid #334155; display:flex; justify-content:space-between; align-items:center; }
+    header { padding: 16px 20px; border-bottom: 1px solid #334155; display:flex; justify-content:space-between; align-items:center; position:sticky; top:0; background:var(--bg); z-index:10; }
+    nav a { color:var(--text); text-decoration:none; margin:0 8px; font-size:14px; opacity:0.8; cursor:pointer; }
+    nav a:hover, nav a.active { opacity:1; color:var(--accent); font-weight:600; }
     main { padding: 20px; max-width: 980px; margin: 0 auto; }
-    .toolbar { display:flex; gap:10px; flex-wrap:wrap; margin: 14px 0; }
-    .btn { background: var(--accent); color:#fff; border:0; padding:10px 14px; border-radius:10px; cursor:pointer; font-weight:600; }
-    .btn-secondary { background: var(--surface2); }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { text-align:left; padding:10px; border-bottom: 1px solid #334155; }
-    th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .toolbar { display:flex; gap:10px; flex-wrap:wrap; margin: 14px 0; align-items:center; }
+    .btn { background: var(--accent); color:#fff; border:0; padding:10px 16px; border-radius:10px; cursor:pointer; font-weight:600; font-size:14px; }
+    .btn:hover { filter: brightness(1.1); }
+    .btn-secondary { background: var(--surface2); color:var(--text); }
+    .btn-danger { background: var(--danger); }
+    .btn-success { background: var(--success); }
+    .card { background: var(--surface); border: 1px solid #334155; border-radius: 14px; padding: 18px; margin: 12px 0; }
     .muted { color: var(--muted); }
-    .hidden { display:none; }
-    input, select { background: var(--surface); color: var(--text); border:1px solid #334155; padding:10px; border-radius:10px; }
+    .hidden { display:none !important; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align:left; padding:10px; border-bottom: 1px solid #334155; font-size:14px; }
+    th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+    input, textarea, select { background: var(--surface); color: var(--text); border:1px solid #334155; padding:10px; border-radius:10px; font-size:14px; }
+    textarea { min-height: 120px; font-family: inherit; }
+    .badge { display:inline-block; padding:4px 10px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; }
+    .badge-draft { background:#334155; color:#cbd5e1; }
+    .badge-sent { background:rgba(16,185,129,0.2); color:#10b981; }
+    .badge-failed { background:rgba(239,68,68,0.2); color:#ef4444; }
+    .badge-pending { background:rgba(245,158,11,0.2); color:#f59e0b; }
+    .stat-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap:12px; margin-top:16px; }
+    .stat { background:var(--surface); border:1px solid #334155; border-radius:12px; padding:16px; text-align:center; }
+    .stat-num { font-size:28px; font-weight:700; }
+    .stat-label { color:var(--muted); font-size:12px; text-transform:uppercase; margin-top:4px; }
+    .section-title { font-size:20px; font-weight:700; margin:0; }
+    .section-desc { color:var(--muted); font-size:13px; margin:4px 0 0; }
+    footer { padding:18px 24px; text-align:center; color:#94a3b8; font-size:12px; border-top:1px solid #334155; margin-top:24px; }
+    footer a { color:#0ea5e9; text-decoration:none; }
+    .empty { text-align:center; padding:40px 20px; color:var(--muted); }
+    .progress { height:8px; background:#334155; border-radius:4px; overflow:hidden; margin-top:8px; }
+    .progress-bar { height:100%; background:var(--accent); width:0%; transition:width 0.3s; }
+    .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; z-index:50; }
+    .modal { background:var(--surface); border:1px solid #334155; border-radius:14px; padding:24px; width:min(520px, 90vw); }
+    .modal h3 { margin:0 0 14px; }
+    .row-actions { display:flex; gap:6px; }
+    .row-actions button { padding:6px 10px; font-size:12px; border-radius:8px; border:0; cursor:pointer; color:#fff; }
   </style>
 </head>
 <body>
   <header>
-    <div>
-      <h1 style="margin:0;font-size:18px;">Contacts</h1>
-      <p class="muted" style="margin:4px 0 0;">Manage your WhatsApp contact list</p>
-    </div>
+    <div style="font-weight:700;font-size:16px;">Bulk WhatsApp Sender</div>
     <nav>
-      <a href="/">Dashboard</a>
-      &nbsp;|&nbsp;
-      <a href="/static/campaigns.html">Campaigns</a>
+      <a onclick="show('dashboard')" id="nav-dashboard" class="active">Dashboard</a>
+      <a onclick="show('contacts')" id="nav-contacts">Contacts</a>
+      <a onclick="show('campaigns')" id="nav-campaigns">Campaigns</a>
+      <a onclick="show('templates')" id="nav-templates">Templates</a>
     </nav>
   </header>
+
   <main>
-    <div class="toolbar">
-      <input id="search" placeholder="Search contacts..." />
-      <input type="file" id="csv" accept=".csv" />
-      <button class="btn" id="import">Import CSV</button>
-      <button class="btn btn-secondary" id="export">Export CSV</button>
-      <button class="btn" id="add">+ Add Contact</button>
-    </div>
-    <div class="toolbar hidden" id="add-form">
-      <input id="name" placeholder="Name" />
-      <input id="phone" placeholder="Phone" />
-      <input id="source" placeholder="Source" />
-      <button class="btn" id="save">Save</button>
-      <button class="btn btn-secondary" id="cancel">Cancel</button>
-    </div>
-    <table>
-      <thead><tr><th>Name</th><th>Phone</th><th>Source</th><th>Added</th></tr></thead>
-      <tbody id="rows"></tbody>
-    </table>
-    <footer style="padding:18px 24px;text-align:center;color:#94a3b8;font-size:12px;border-top:1px solid #334155;margin-top:24px;">
-      Powered by <a href="https://tisementmedia.com" target="_blank" style="color:#0ea5e9;text-decoration:none;">Tisement Media</a> • Bulk WhatsApp Sender
-    </footer>
+    <!-- Dashboard -->
+    <section id="page-dashboard">
+      <h1 class="section-title">Dashboard</h1>
+      <p class="section-desc">Overview of your WhatsApp outreach</p>
+      <div class="stat-grid">
+        <div class="stat"><div class="stat-num" id="stat-contacts">-</div><div class="stat-label">Contacts</div></div>
+        <div class="stat"><div class="stat-num" id="stat-campaigns">-</div><div class="stat-label">Campaigns</div></div>
+        <div class="stat"><div class="stat-num" id="stat-sent">-</div><div class="stat-label">Sent</div></div>
+        <div class="stat"><div class="stat-num" id="stat-failed">-</div><div class="stat-label">Failed</div></div>
+      </div>
+      <div class="card" style="margin-top:20px;">
+        <h3 style="margin:0 0 10px;">Quick Actions</h3>
+        <div class="toolbar">
+          <button class="btn" onclick="show('contacts')">Add Contacts</button>
+          <button class="btn btn-secondary" onclick="show('campaigns')">New Campaign</button>
+          <button class="btn btn-secondary" onclick="show('templates')">Templates</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Contacts -->
+    <section id="page-contacts" class="hidden">
+      <h1 class="section-title">Contacts</h1>
+      <p class="section-desc">Manage your WhatsApp contact list</p>
+      <div class="toolbar">
+        <input id="search" placeholder="Search contacts..." style="flex:1;min-width:180px;" />
+        <input type="file" id="csv" accept=".csv" class="hidden" />
+        <button class="btn" onclick="document.getElementById('csv').click()">Import CSV</button>
+        <button class="btn btn-secondary" onclick="exportCsv()">Export CSV</button>
+        <button class="btn" id="add-btn">+ Add Contact</button>
+      </div>
+      <div class="card hidden" id="add-form">
+        <div class="toolbar">
+          <input id="name" placeholder="Name" style="flex:1;" />
+          <input id="phone" placeholder="Phone e.g. 2547..." style="flex:1;" />
+          <input id="source" placeholder="Source" style="flex:1;" />
+          <button class="btn" id="save-contact">Save</button>
+          <button class="btn btn-secondary" id="cancel-contact">Cancel</button>
+        </div>
+      </div>
+      <div class="card">
+        <table>
+          <thead><tr><th>Name</th><th>Phone</th><th>Source</th><th>Added</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <div id="contacts-empty" class="empty hidden">No contacts yet. Add your first contact above.</div>
+      </div>
+    </section>
+
+    <!-- Campaigns -->
+    <section id="page-campaigns" class="hidden">
+      <h1 class="section-title">Campaigns</h1>
+      <p class="section-desc">Create and send WhatsApp campaigns</p>
+      <div class="toolbar">
+        <button class="btn" id="new-campaign">+ New Campaign</button>
+      </div>
+      <div class="card hidden" id="campaign-form">
+        <h3 style="margin:0 0 10px;">New Campaign</h3>
+        <div style="display:grid;gap:10px;margin-top:10px;">
+          <input id="camp-name" placeholder="Campaign name" />
+          <textarea id="camp-body" placeholder="Message body or use a template..."></textarea>
+          <input id="camp-template" placeholder="Optional template name from Meta" />
+        </div>
+        <div class="toolbar" style="margin-top:12px;">
+          <button class="btn" id="save-campaign">Save</button>
+          <button class="btn btn-secondary" id="cancel-campaign">Cancel</button>
+        </div>
+      </div>
+      <div id="campaign-list"></div>
+      <div id="campaigns-empty" class="empty hidden">No campaigns yet. Create your first campaign above.</div>
+    </section>
+
+    <!-- Templates -->
+    <section id="page-templates" class="hidden">
+      <h1 class="section-title">Templates</h1>
+      <p class="section-desc">Create and submit WhatsApp templates for Meta approval</p>
+      <div class="toolbar">
+        <button class="btn" id="new-template">+ New Template</button>
+      </div>
+      <div class="card hidden" id="template-form">
+        <h3 style="margin:0 0 10px;">New Template</h3>
+        <div style="display:grid;gap:10px;margin-top:10px;">
+          <input id="tpl-name" placeholder="Template name (lowercase, no spaces)" />
+          <select id="tpl-lang"><option>en_US</option><option>en_GB</option><option>sw_KE</option></select>
+          <select id="tpl-cat"><option>MARKETING</option><option>UTILITY</option></select>
+          <input id="tpl-header" placeholder="Header (optional)" />
+          <textarea id="tpl-body" placeholder="Body text. Use {{1}}, {{2}} for variables."></textarea>
+          <input id="tpl-footer" placeholder="Footer (optional)" />
+        </div>
+        <div class="toolbar" style="margin-top:12px;">
+          <button class="btn" id="save-template">Save Draft</button>
+          <button class="btn btn-success" id="submit-template">Submit to Meta</button>
+          <button class="btn btn-secondary" id="cancel-template">Cancel</button>
+        </div>
+        <p class="muted" style="font-size:12px;margin-top:8px;">Submit to Meta sends it for approval. Once approved, you can use it in campaigns.</p>
+      </div>
+      <div id="template-list"></div>
+      <div id="templates-empty" class="empty hidden">No templates yet. Create one above.</div>
+    </section>
   </main>
+
+  <footer>
+    Powered by <a href="https://tisementmedia.com" target="_blank">Tisement Media</a> • Bulk WhatsApp Sender
+  </footer>
+
   <script>
-    async function load() {
-      const q = document.getElementById('search').value.toLowerCase();
-      const res = await fetch('/contacts/');
-      const all = await res.json();
-      const filtered = all.filter(c => `${c.name||''} ${c.phone}`.toLowerCase().includes(q));
-      document.getElementById('rows').innerHTML = filtered.map(c => `<tr><td>${escape(c.name||'')}</td><td>${escape(c.phone)}</td><td>${escape(c.source||'')}</td><td class="muted">${new Date(c.created_at).toLocaleString()}</td></tr>`).join('');
+    const API = '';
+    const $ = id => document.getElementById(id);
+
+    function escape(s){ if(typeof s!=='string') return ''; return s.replace(/[&<>'\"]/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','\'':'&#39;','"':'&quot;' }[m])); }
+    function badge(status){
+      const map = { draft:'badge-draft', sent:'badge-sent', failed:'badge-failed', pending:'badge-pending', queued:'badge-draft', submitted:'badge-pending', approved:'badge-sent', rejected:'badge-failed' };
+      return `<span class="badge ${map[status]||'badge-draft'}">${escape(status)}</span>`;
     }
-    function escape(s){ if(typeof s!=='string') return ''; return s.replace(/[&<>'"]/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','\'':'&#39;','"':'&quot;' }[m])); }
-    document.getElementById('search').addEventListener('input', load);
-    document.getElementById('add').onclick = () => document.getElementById('add-form').classList.remove('hidden');
-    document.getElementById('cancel').onclick = () => document.getElementById('add-form').classList.add('hidden');
-    document.getElementById('save').onclick = async () => {
-      const phone = document.getElementById('phone').value.trim();
-      if (!phone) return alert('Phone required');
-      await fetch('/contacts/', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ phone, name: document.getElementById('name').value, source: document.getElementById('source').value }) });
-      document.getElementById('add-form').classList.add('hidden');
-      load();
+
+    function show(page){
+      ['dashboard','contacts','campaigns','templates'].forEach(p => {
+        $('page-'+p).classList.toggle('hidden', p!==page);
+        $('nav-'+p).classList.toggle('active', p===page);
+      });
+      if(page==='dashboard') loadDashboard();
+      if(page==='contacts') loadContacts();
+      if(page==='campaigns') loadCampaigns();
+      if(page==='templates') loadTemplates();
+    }
+
+    async function loadDashboard(){
+      const [contacts, campaigns] = await Promise.all([ fetch('/contacts/').then(r=>r.json()), fetch('/campaigns/').then(r=>r.json()) ]);
+      $('stat-contacts').textContent = contacts.length;
+      $('stat-campaigns').textContent = campaigns.length;
+      let sent=0, failed=0;
+      for(const c of campaigns){ if(c.status==='sent') sent++; if(c.status==='failed') failed++; }
+      $('stat-sent').textContent = sent;
+      $('stat-failed').textContent = failed;
+    }
+
+    async function loadContacts(){
+      const q = $('search').value.toLowerCase();
+      const all = await fetch('/contacts/').then(r=>r.json());
+      const filtered = all.filter(c => `${c.name||''} ${c.phone}`.toLowerCase().includes(q));
+      $('rows').innerHTML = filtered.map(c => `<tr><td>${escape(c.name||'')}</td><td>${escape(c.phone)}</td><td>${escape(c.source||'')}</td><td class="muted">${new Date(c.created_at).toLocaleString()}</td></tr>`).join('');
+      $('contacts-empty').classList.toggle('hidden', filtered.length>0);
+    }
+    $('search').addEventListener('input', loadContacts);
+    $('add-btn').onclick = () => $('add-form').classList.remove('hidden');
+    $('cancel-contact').onclick = () => $('add-form').classList.add('hidden');
+    $('save-contact').onclick = async () => {
+      const phone = $('phone').value.trim(); if(!phone) return alert('Phone required');
+      await fetch('/contacts/', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ phone, name: $('name').value, source: $('source').value }) });
+      $('name').value=$('phone').value=$('source').value='';
+      $('add-form').classList.add('hidden'); loadContacts();
     };
-    document.getElementById('import').onclick = async () => {
-      const file = document.getElementById('csv').files[0];
-      if (!file) return alert('Choose CSV');
+    $('csv').addEventListener('change', async (e) => {
+      const file = e.target.files[0]; if(!file) return;
       const fd = new FormData(); fd.append('file', file);
       const res = await fetch('/contacts/import-csv', { method:'POST', body: fd });
       const data = await res.json();
       alert(`Imported: ${data.imported}, Skipped: ${data.skipped}, Duplicates: ${data.duplicates}`);
-      load();
+      loadContacts();
+    });
+    function exportCsv(){ window.location.href = '/contacts/export-csv'; }
+
+    async function loadCampaigns(){
+      const items = await fetch('/campaigns/').then(r=>r.json());
+      $('campaign-list').innerHTML = items.map(c => `
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+            <div>
+              <h3 style="margin:0;">${escape(c.name)}</h3>
+              <p class="muted" style="margin:6px 0 0;">${badge(c.status)}${c.template_name ? ' • Template: '+escape(c.template_name) : ''}</p>
+              <p class="muted" style="margin:4px 0 0;font-size:13px;">${escape((c.body_text||'').slice(0,140))}${(c.body_text||'').length>140?'...':''}</p>
+            </div>
+            <div class="row-actions">
+              <button class="btn" onclick="sendCampaign(${c.id})">Send</button>
+              <button class="btn btn-secondary" onclick="addRecipients(${c.id})">Recipients</button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+      $('campaigns-empty').classList.toggle('hidden', items.length>0);
+    }
+    $('new-campaign').onclick = () => $('campaign-form').classList.remove('hidden');
+    $('cancel-campaign').onclick = () => $('campaign-form').classList.add('hidden');
+    $('save-campaign').onclick = async () => {
+      const payload = { name: $('camp-name').value, body_text: $('camp-body').value, template_name: $('camp-template').value || null };
+      await fetch('/campaigns/', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      $('camp-name').value=$('camp-body').value=$('camp-template').value='';
+      $('campaign-form').classList.add('hidden'); loadCampaigns();
     };
-    document.getElementById('export').onclick = () => { window.location.href = '/contacts/export-csv'; };
-    document.addEventListener('DOMContentLoaded', load);
+    window.sendCampaign = async (id) => {
+      if(!confirm('Send this campaign now?')) return;
+      const res = await fetch(`/campaigns/${id}/send`, { method:'POST' });
+      const data = await res.json();
+      alert(`Sent: ${data.sent}, Failed: ${data.failed}, Skipped: ${data.skipped}`);
+      loadCampaigns(); loadDashboard();
+    };
+    window.addRecipients = async (id) => {
+      const phone = prompt('Enter contact phone to add as recipient:');
+      if(!phone) return;
+      const contacts = await fetch('/contacts/').then(r=>r.json());
+      const match = contacts.find(c => c.phone === phone.trim());
+      if(!match) return alert('Contact not found');
+      const res = await fetch(`/campaigns/${id}/recipients`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify([match.id]) });
+      const data = await res.json();
+      alert(`Added ${data.added} recipient(s)`);
+    };
+
+    async function loadTemplates(){
+      const items = await fetch('/templates/').then(r=>r.json());
+      $('template-list').innerHTML = items.map(t => `
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+            <div>
+              <h3 style="margin:0;">${escape(t.name)}</h3>
+              <p class="muted" style="margin:6px 0 0;">${badge(t.status)} • ${escape(t.language)} • ${escape(t.category)}</p>
+              <p style="margin:8px 0 0;font-size:14px;">${escape(t.body)}</p>
+              ${t.header ? `<p class="muted" style="font-size:12px;margin-top:4px;">Header: ${escape(t.header)}</p>` : ''}
+              ${t.footer ? `<p class="muted" style="font-size:12px;">Footer: ${escape(t.footer)}</p>` : ''}
+            </div>
+          </div>
+        </div>
+      `).join('');
+      $('templates-empty').classList.toggle('hidden', items.length>0);
+    }
+    $('new-template').onclick = () => $('template-form').classList.remove('hidden');
+    $('cancel-template').onclick = () => $('template-form').classList.add('hidden');
+    $('save-template').onclick = async () => {
+      const payload = { name: $('tpl-name').value, language: $('tpl-lang').value, category: $('tpl-cat').value, body: $('tpl-body').value, header: $('tpl-header').value || null, footer: $('tpl-footer').value || null };
+      await fetch('/templates/', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      $('tpl-name').value=$('tpl-body').value=$('tpl-header').value=$('tpl-footer').value='';
+      $('template-form').classList.add('hidden'); loadTemplates();
+    };
+    $('submit-template').onclick = async () => {
+      const payload = { name: $('tpl-name').value, language: $('tpl-lang').value, category: $('tpl-cat').value, body: $('tpl-body').value, header: $('tpl-header').value || null, footer: $('tpl-footer').value || null };
+      const res = await fetch('/templates/submit-meta', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      const data = await res.json();
+      if(res.ok){ alert('Submitted to Meta!'); $('tpl-name').value=$('tpl-body').value=$('tpl-header').value=$('tpl-footer').value=''; $('template-form').classList.add('hidden'); loadTemplates(); }
+      else { alert('Error: ' + JSON.stringify(data.detail||data)); }
+    };
+
+    document.addEventListener('DOMContentLoaded', () => show('dashboard'));
   </script>
 </body>
 </html>
