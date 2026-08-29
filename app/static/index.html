@@ -124,6 +124,8 @@
           <input id="camp-name" placeholder="Campaign name" />
           <textarea id="camp-body" placeholder="Message body or use a template..."></textarea>
           <input id="camp-template" placeholder="Optional template name from Meta" />
+          <input id="camp-scheduled" type="datetime-local" />
+          <p class="muted" style="font-size:12px;margin-top:-6px;">Leave empty to save as draft. Pick a future time to schedule.</p>
         </div>
         <div class="toolbar" style="margin-top:12px;">
           <button class="btn" id="save-campaign">Save</button>
@@ -303,9 +305,10 @@
     $('new-campaign').onclick = () => $('campaign-form').classList.remove('hidden');
     $('cancel-campaign').onclick = () => $('campaign-form').classList.add('hidden');
     $('save-campaign').onclick = async () => {
-      const payload = { name: $('camp-name').value, body_text: $('camp-body').value, template_name: $('camp-template').value || null };
+      const scheduled = $('camp-scheduled').value || null;
+      const payload = { name: $('camp-name').value, body_text: $('camp-body').value, template_name: $('camp-template').value || null, scheduled_at: scheduled };
       await fetch('/campaigns/', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-      $('camp-name').value=$('camp-body').value=$('camp-template').value='';
+      $('camp-name').value=$('camp-body').value=$('camp-template').value=$('camp-scheduled').value='';
       $('campaign-form').classList.add('hidden'); loadCampaigns();
     };
     window.sendCampaign = async (id) => {

@@ -4,12 +4,19 @@ from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from app.database import init_db
 from app.routers import contacts, campaigns, templates, settings as settings_router, ai
+from app.services import scheduler_loop
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    task = asyncio.create_task(scheduler_loop())
     yield
+    task.cancel()
+    try:
+        await task
+    except Exception:
+        pass
 
 
 app = FastAPI(title="Bulk WhatsApp Sender", version="0.1.0", lifespan=lifespan)

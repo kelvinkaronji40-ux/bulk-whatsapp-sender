@@ -15,6 +15,9 @@ DATABASE_URL = os.getenv(
 engine = create_async_engine(DATABASE_URL, echo=False)
 async_session = async_sessionmaker(engine, expire_on_commit=False)
 
+def get_session_factory():
+    return async_session
+
 
 async def init_db() -> None:
     db_path = Path(DATABASE_URL.replace("sqlite+aiosqlite:///", ""))

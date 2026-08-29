@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import csv
 import io
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -123,12 +124,21 @@ async def import_contacts_csv(session: AsyncSession, content: bytes) -> dict[str
 
 
 async def create_campaign(session: AsyncSession, payload: dict[str, Any]) -> Campaign:
+    scheduled_at = payload.get("scheduled_at")
+    status = "draft"
+    if scheduled_at:
+        if isinstance(scheduled_at, str):
+            scheduled_at = datetime.fromisoformat(scheduled_at.replace("Z", "+00:00"))
+        if scheduled_at.tzinfo is None:
+            scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
+        if scheduled_at > datetime.now(timezone.utc):
+            status = "scheduled"
     campaign = Campaign(
         name=payload["name"],
         body_text=payload["body_text"],
         template_name=payload.get("template_name"),
-        status="draft",
-        scheduled_at=payload.get("scheduled_at"),
+        status=status,
+        scheduled_at=scheduled_at,
     )
     session.add(campaign)
     await session.commit()
@@ -193,3 +203,33 @@ async def send_campaign(session: AsyncSession, campaign_id: int, limit: int | No
         campaign.status = "sent" if failed == 0 else ("partial" if sent > 0 else "failed")
         await session.commit()
     return {"sent": sent, "failed": failed, "skipped": skipped}
+
+
+async def run_send_job(session: AsyncSession, campaign_id: int) -> dict[str, int]:
+    campaign = (await session.execute(select(Campaign).where(Campaign.id == campaign_id))).scalar_one_or_none()
+    if not campaign:
+        return {"sent": 0, "failed": 0, "skipped": 0}
+    if campaign.status in {"sent", "partial", "sending"}:
+        return {"sent": 0, "failed": 0, "skipped": 0}
+    campaign.status = "sending"
+    await session.commit()
+    return await send_campaign(session, campaign_id)
+
+
+async def scheduler_loop(session_factory):
+    while True:
+        try:
+            async with session_factory() as session:
+                now = datetime.now(timezone.utc)
+                due = (await session.execute(
+                    select(Campaign).where(
+                        Campaign.scheduled_at != None,
+                        Campaign.status == "scheduled",
+                        Campaign.scheduled_at <= now,
+                    )
+                )).scalars().all()
+                for campaign in due:
+                    await run_send_job(session, campaign.id)
+        except Exception:
+            pass
+        await asyncio.sleep(30)

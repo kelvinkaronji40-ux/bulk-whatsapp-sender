@@ -77,6 +77,16 @@ async def test_campaigns_crud(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_scheduled_campaign_status(client: AsyncClient):
+    from datetime import datetime, timedelta, timezone
+    future = (datetime.now(timezone.utc) + timedelta(minutes=30)).isoformat()
+    payload = {"name": "Scheduled", "body_text": "Hi", "template_name": None, "scheduled_at": future}
+    r = await client.post("/campaigns/", json=payload)
+    assert r.status_code == 201
+    assert r.json()["status"] == "scheduled"
+
+
+@pytest.mark.asyncio
 async def test_csv_import(client: AsyncClient):
     csv_data = b"name,phone,source\nAlice,254700000001,web\nBob,254700000002,web\n"
     r = await client.post("/contacts/import-csv", files={"file": ("leads.csv", csv_data, "text/csv")})
