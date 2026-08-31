@@ -6,34 +6,35 @@ from app.database import get_session
 from app.models import Campaign, CampaignContact, Contact
 from app.schemas import CampaignIn, CampaignOut, CampaignDetail
 from app.services import create_campaign, add_recipients_to_campaign, send_campaign
+from app.auth import get_current_client
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 
 
 @router.get("/", response_model=list[CampaignOut])
-async def list_campaigns(session: AsyncSession = Depends(get_session)):
-    rows = (await session.execute(select(Campaign).order_by(Campaign.created_at.desc()))).scalars().all()
+async def list_campaigns(session: AsyncSession = Depends(get_session), client=Depends(get_current_client)):
+    rows = (await session.execute(select(Campaign).where(Campaign.client_id == client.id).order_by(Campaign.created_at.desc()))).scalars().all()
     return rows
 
 
 @router.post("/", response_model=CampaignOut, status_code=status.HTTP_201_CREATED)
-async def create_campaign_endpoint(payload: CampaignIn, session: AsyncSession = Depends(get_session)):
-    camp = await create_campaign(session, payload.model_dump())
+async def create_campaign_endpoint(payload: CampaignIn, session: AsyncSession = Depends(get_session), client=Depends(get_current_client)):
+    camp = await create_campaign(session, {**payload.model_dump(), "client_id": client.id})
     return camp
 
 
 @router.get("/{campaign_id}", response_model=CampaignDetail)
-async def get_campaign(campaign_id: int, session: AsyncSession = Depends(get_session)):
-    camp = (await session.execute(select(Campaign).where(Campaign.id == campaign_id))).scalar_one_or_none()
+async def get_campaign(campaign_id: int, session: AsyncSession = Depends(get_session), client=Depends(get_current_client)):
+    camp = (await session.execute(select(Campaign).where(Campaign.client_id == client.id, Campaign.id == campaign_id))).scalar_one_or_none()
     if not camp:
         raise HTTPException(status_code=404, detail="campaign_not_found")
     ccs = (await session.execute(
-        select(CampaignContact).where(CampaignContact.campaign_id == campaign_id)
+        select(CampaignContact).where(CampaignContact.campaign_id == campaign_id, CampaignContact.client_id == client.id)
     )).scalars().all()
     contact_ids = [cc.contact_id for cc in ccs]
     contacts = []
     if contact_ids:
-        rows = (await session.execute(select(Contact).where(Contact.id.in_(contact_ids)))).scalars().all()
+        rows = (await session.execute(select(Contact).where(Contact.client_id == client.id, Contact.id.in_(contact_ids)))).scalars().all()
         contacts = [{"id": r.id, "phone": r.phone, "name": r.name} for r in rows]
     stats = {
         "queued": sum(1 for cc in ccs if cc.status == "queued"),
@@ -49,12 +50,12 @@ async def get_campaign(campaign_id: int, session: AsyncSession = Depends(get_ses
 
 
 @router.post("/{campaign_id}/recipients")
-async def add_recipients(campaign_id: int, contact_ids: list[int], session: AsyncSession = Depends(get_session)):
-    added = await add_recipients_to_campaign(session, campaign_id, contact_ids)
+async def add_recipients(campaign_id: int, contact_ids: list[int], session: AsyncSession = Depends(get_session), client=Depends(get_current_client)):
+    added = await add_recipients_to_campaign(session, campaign_id, contact_ids, client_id=client.id)
     return {"added": added}
 
 
 @router.post("/{campaign_id}/send")
-async def send_campaign_endpoint(campaign_id: int, limit: int | None = None, session: AsyncSession = Depends(get_session)):
-    result = await send_campaign(session, campaign_id, limit)
+async def send_campaign_endpoint(campaign_id: int, limit: int | None = None, session: AsyncSession = Depends(get_session), client=Depends(get_current_client)):
+    result = await send_campaign(session, campaign_id, client_id=client.id, limit=limit)
     return result

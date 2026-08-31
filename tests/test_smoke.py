@@ -6,6 +6,9 @@ from sqlalchemy.orm import DeclarativeBase
 from app.main import app
 from app.database import get_session
 from app.models import Base
+from app.auth import get_current_client
+
+TEST_API_KEY = "test_api_key_123"
 
 
 @pytest.fixture(scope="session")
@@ -32,11 +35,23 @@ async def db_session():
 
 @pytest.fixture()
 async def client(db_session: AsyncSession):
-    async def _override():
+    from app.models import Client
+    c = Client(name="Test Client", api_key=TEST_API_KEY)
+    db_session.add(c)
+    await db_session.commit()
+    await db_session.refresh(c)
+
+    async def _override_session():
         yield db_session
-    app.dependency_overrides[get_session] = _override
+    app.dependency_overrides[get_session] = _override_session
+
+    async def _override_client():
+        return c
+    app.dependency_overrides[get_current_client] = _override_client
+
+    headers = {"X-API-Key": TEST_API_KEY}
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=headers) as ac:
         yield ac
     app.dependency_overrides.clear()
 
@@ -64,7 +79,7 @@ async def test_contacts_crud(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_campaigns_crud(client: AsyncClient):
-    payload = {"name": "Launch", "body_text": "Hello {{name}}", "template_name": None}
+    payload = {"name": "Launch", "body_text": "Hello {{name}}", "template_name": None, "client_id": 1}
     r = await client.post("/campaigns/", json=payload)
     assert r.status_code == 201
     cid = r.json()["id"]
@@ -80,7 +95,7 @@ async def test_campaigns_crud(client: AsyncClient):
 async def test_scheduled_campaign_status(client: AsyncClient):
     from datetime import datetime, timedelta, timezone
     future = (datetime.now(timezone.utc) + timedelta(minutes=30)).isoformat()
-    payload = {"name": "Scheduled", "body_text": "Hi", "template_name": None, "scheduled_at": future}
+    payload = {"name": "Scheduled", "body_text": "Hi", "template_name": None, "scheduled_at": future, "client_id": 1}
     r = await client.post("/campaigns/", json=payload)
     assert r.status_code == 201
     assert r.json()["status"] == "scheduled"
@@ -94,3 +109,20 @@ async def test_csv_import(client: AsyncClient):
     body = r.json()
     assert body["imported"] == 2
     assert body["duplicates"] == 0
+
+
+@pytest.mark.asyncio
+async def test_missing_api_key(client: AsyncClient):
+    app.dependency_overrides.pop(get_current_client, None)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        r = await ac.get("/contacts/")
+    assert r.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_invalid_api_key(client: AsyncClient):
+    from fastapi import HTTPException
+    app.dependency_overrides[get_current_client] = lambda: (_ for _ in ()).throw(HTTPException(status_code=403, detail="bad"))
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test", headers={"X-API-Key": "bad"}) as ac:
+        r = await ac.get("/contacts/")
+    assert r.status_code == 403

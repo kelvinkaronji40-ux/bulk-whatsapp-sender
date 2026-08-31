@@ -2,7 +2,9 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
-from app.database import init_db
+import asyncio
+
+from app.database import init_db, get_session_factory
 from app.routers import contacts, campaigns, templates, settings as settings_router, ai
 from app.services import scheduler_loop
 
@@ -10,7 +12,7 @@ from app.services import scheduler_loop
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    task = asyncio.create_task(scheduler_loop())
+    task = asyncio.create_task(scheduler_loop(get_session_factory()))
     yield
     task.cancel()
     try:
