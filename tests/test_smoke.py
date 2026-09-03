@@ -2,10 +2,11 @@ import pytest
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy import select
 
 from app.main import app
 from app.database import get_session
-from app.models import Base
+from app.models import Base, Client
 from app.auth import get_current_client
 
 TEST_API_KEY = "test_api_key_123"
@@ -35,7 +36,6 @@ async def db_session():
 
 @pytest.fixture()
 async def client(db_session: AsyncSession):
-    from app.models import Client
     c = Client(name="Test Client", api_key=TEST_API_KEY)
     db_session.add(c)
     await db_session.commit()
@@ -126,3 +126,42 @@ async def test_invalid_api_key(client: AsyncClient):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test", headers={"X-API-Key": "bad"}) as ac:
         r = await ac.get("/contacts/")
     assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_register_and_isolation(db_session: AsyncSession):
+    # override DB session only
+    async def _session():
+        yield db_session
+    app.dependency_overrides[get_session] = _session
+    app.dependency_overrides.pop(get_current_client, None)
+
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            r1 = await ac.post("/auth/register", json={"name": "Alpha"})
+            assert r1.status_code == 200
+            c1 = r1.json()
+
+            r2 = await ac.post("/auth/register", json={"name": "Beta"})
+            assert r2.status_code == 200
+            c2 = r2.json()
+
+            assert c1["api_key"] != c2["api_key"]
+
+            # create contact under Alpha
+            async def _client_a():
+                return (await db_session.execute(select(Client).where(Client.api_key == c1["api_key"]))).scalar_one()
+            app.dependency_overrides[get_current_client] = _client_a
+            r = await ac.post("/contacts/", json={"phone": "254700000001", "name": "C1", "source": "web"})
+            assert r.status_code == 201
+
+            # switch to Beta
+            async def _client_b():
+                return (await db_session.execute(select(Client).where(Client.api_key == c2["api_key"]))).scalar_one()
+            app.dependency_overrides[get_current_client] = _client_b
+            r = await ac.get("/contacts/")
+            assert r.status_code == 200
+            assert len(r.json()) == 0
+    finally:
+        app.dependency_overrides.clear()

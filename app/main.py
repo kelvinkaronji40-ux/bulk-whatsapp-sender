@@ -6,6 +6,7 @@ import asyncio
 
 from app.database import init_db, get_session_factory
 from app.routers import contacts, campaigns, templates, settings as settings_router, ai
+from app.auth import router as auth_router
 from app.services import scheduler_loop
 
 
@@ -30,6 +31,7 @@ app.include_router(campaigns.router)
 app.include_router(templates.router)
 app.include_router(settings_router.router)
 app.include_router(ai.router)
+app.include_router(auth_router)
 
 
 @app.get("/", response_class=HTMLResponse)

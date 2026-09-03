@@ -58,6 +58,7 @@
       <a onclick="show('campaigns')" id="nav-campaigns">Campaigns</a>
       <a onclick="show('templates')" id="nav-templates">Templates</a>
       <a onclick="show('settings')" id="nav-settings">Settings</a>
+      <a onclick="logout()" id="nav-logout" class="hidden">Logout</a>
     </nav>
   </header>
 
@@ -167,6 +168,28 @@
       <p class="muted" style="font-size:12px;margin-top:10px;">🟢 Approved templates can be used in campaigns. Pending/rejected templates need action.</p>
     </section>
 
+    <!-- Login -->
+    <section id="page-login" class="hidden">
+      <div class="card" style="max-width:360px;margin:60px auto;text-align:center;">
+        <h1 class="section-title">Login</h1>
+        <p class="section-desc">Enter your API key to access your workspace.</p>
+        <input id="login-key" placeholder="Paste API key" style="width:100%;margin-top:12px;" />
+        <button class="btn" id="do-login" style="width:100%;margin-top:12px;">Login</button>
+        <p class="muted" style="margin-top:12px;font-size:13px;">No account? <a onclick="show('register')" style="color:var(--accent);cursor:pointer;">Register</a></p>
+      </div>
+    </section>
+
+    <!-- Register -->
+    <section id="page-register" class="hidden">
+      <div class="card" style="max-width:360px;margin:60px auto;text-align:center;">
+        <h1 class="section-title">Create Account</h1>
+        <p class="section-desc">Get your API key to start sending WhatsApp campaigns.</p>
+        <input id="reg-name" placeholder="Your name or business" style="width:100%;margin-top:12px;" />
+        <button class="btn" id="do-register" style="width:100%;margin-top:12px;">Get API Key</button>
+        <p class="muted" style="margin-top:12px;font-size:13px;">Already registered? <a onclick="show('login')" style="color:var(--accent);cursor:pointer;">Login</a></p>
+      </div>
+    </section>
+
     <!-- Settings -->
     <section id="page-settings" class="hidden">
       <h1 class="section-title">Settings</h1>
@@ -229,16 +252,29 @@
     const API = '';
     const $ = id => document.getElementById(id);
 
-    function escape(s){ if(typeof s!=='string') return ''; return s.replace(/[&<>'\\"]/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','\'':'&#39;','"':'&quot;' }[m])); }
-    function badge(status){
-      const map = { draft:'badge-draft', sent:'badge-sent', failed:'badge-failed', pending:'badge-pending', queued:'badge-draft', submitted:'badge-pending', approved:'badge-sent', rejected:'badge-failed' };
-      return `<span class="badge ${map[status]||'badge-draft'}">${escape(status)}</span>`;
+    // Auth state
+    let clientApiKey = localStorage.getItem('bws_api_key') || '';
+    let clientName = localStorage.getItem('bws_client_name') || '';
+
+    function requireAuth(){
+      if(!clientApiKey){
+        show('login');
+        return false;
+      }
+      return true;
     }
 
+    function escape(s){ if(typeof s!=='string') return ''; return s.replace(/[&<>'\\"]/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','\\'':'&#39;','"':'&quot;' }[m])); }
+
     function show(page){
-      ['dashboard','contacts','campaigns','templates','settings'].forEach(p => {
-        $('page-'+p).classList.toggle('hidden', p!==page);
-        $('nav-'+p).classList.toggle('active', p===page);
+      ['dashboard','contacts','campaigns','templates','settings','login','register'].forEach(p => {
+        const el = $('page-'+p);
+        if(el) el.classList.toggle('hidden', p!==page);
+      });
+      const navPages = ['dashboard','contacts','campaigns','templates','settings'];
+      navPages.forEach(p => {
+        const nav = $('nav-'+p);
+        if(nav) nav.classList.toggle('active', p===page);
       });
       if(page==='dashboard') loadDashboard();
       if(page==='contacts') loadContacts();
@@ -247,19 +283,38 @@
       if(page==='settings') loadSettings();
     }
 
+    async function api(path, options={}){
+      if(!requireAuth()) return Promise.reject(new Error('Not authenticated'));
+      const headers = { ...options.headers, 'X-API-Key': clientApiKey };
+      if(!(options.body instanceof FormData)) headers['Content-Type'] = 'application/json';
+      const res = await fetch(API + path, { ...options, headers });
+      if(res.status===401||res.status===403){
+        localStorage.removeItem('bws_api_key');
+        localStorage.removeItem('bws_client_name');
+        clientApiKey=''; clientName='';
+        show('login');
+        return Promise.reject(new Error('Session expired'));
+      }
+      return res;
+    }
+
     async function loadDashboard(){
-      const [contacts, campaigns] = await Promise.all([ fetch('/contacts/').then(r=>r.json()), fetch('/campaigns/').then(r=>r.json()) ]);
-      $('stat-contacts').textContent = contacts.length;
-      $('stat-campaigns').textContent = campaigns.length;
-      let sent=0, failed=0;
-      for(const c of campaigns){ if(c.status==='sent') sent++; if(c.status==='failed') failed++; }
-      $('stat-sent').textContent = sent;
-      $('stat-failed').textContent = failed;
+      if(!requireAuth()) return;
+      try{
+        const [contacts, campaigns] = await Promise.all([ api('/contacts/').then(r=>r.json()), api('/campaigns/').then(r=>r.json()) ]);
+        $('stat-contacts').textContent = contacts.length;
+        $('stat-campaigns').textContent = campaigns.length;
+        let sent=0, failed=0;
+        for(const c of campaigns){ if(c.status==='sent') sent++; if(c.status==='failed') failed++; }
+        $('stat-sent').textContent = sent;
+        $('stat-failed').textContent = failed;
+      }catch(e){ console.error(e); }
     }
 
     async function loadContacts(){
+      if(!requireAuth()) return;
       const q = $('search').value.toLowerCase();
-      const all = await fetch('/contacts/').then(r=>r.json());
+      const all = await api('/contacts/').then(r=>r.json());
       const filtered = all.filter(c => `${c.name||''} ${c.phone}`.toLowerCase().includes(q));
       $('rows').innerHTML = filtered.map(c => `<tr><td>${escape(c.name||'')}</td><td>${escape(c.phone)}</td><td>${escape(c.source||'')}</td><td class="muted">${new Date(c.created_at).toLocaleString()}</td></tr>`).join('');
       $('contacts-empty').classList.toggle('hidden', filtered.length>0);
@@ -269,14 +324,14 @@
     $('cancel-contact').onclick = () => $('add-form').classList.add('hidden');
     $('save-contact').onclick = async () => {
       const phone = $('phone').value.trim(); if(!phone) return alert('Phone required');
-      await fetch('/contacts/', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ phone, name: $('name').value, source: $('source').value }) });
+      await api('/contacts/', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ phone, name: $('name').value, source: $('source').value }) });
       $('name').value=$('phone').value=$('source').value='';
       $('add-form').classList.add('hidden'); loadContacts();
     };
     $('csv').addEventListener('change', async (e) => {
       const file = e.target.files[0]; if(!file) return;
       const fd = new FormData(); fd.append('file', file);
-      const res = await fetch('/contacts/import-csv', { method:'POST', body: fd });
+      const res = await api('/contacts/import-csv', { method:'POST', body: fd });
       const data = await res.json();
       alert(`Imported: ${data.imported}, Skipped: ${data.skipped}, Duplicates: ${data.duplicates}`);
       loadContacts();
@@ -284,7 +339,8 @@
     function exportCsv(){ window.location.href = '/contacts/export-csv'; }
 
     async function loadCampaigns(){
-      const items = await fetch('/campaigns/').then(r=>r.json());
+      if(!requireAuth()) return;
+      const items = await api('/campaigns/').then(r=>r.json());
       $('campaign-list').innerHTML = items.map(c => `
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
@@ -307,13 +363,13 @@
     $('save-campaign').onclick = async () => {
       const scheduled = $('camp-scheduled').value || null;
       const payload = { name: $('camp-name').value, body_text: $('camp-body').value, template_name: $('camp-template').value || null, scheduled_at: scheduled };
-      await fetch('/campaigns/', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      await api('/campaigns/', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
       $('camp-name').value=$('camp-body').value=$('camp-template').value=$('camp-scheduled').value='';
       $('campaign-form').classList.add('hidden'); loadCampaigns();
     };
     window.sendCampaign = async (id) => {
       if(!confirm('Send this campaign now?')) return;
-      const res = await fetch(`/campaigns/${id}/send`, { method:'POST' });
+      const res = await api(`/campaigns/${id}/send`, { method:'POST' });
       const data = await res.json();
       alert(`Sent: ${data.sent}, Failed: ${data.failed}, Skipped: ${data.skipped}`);
       loadCampaigns(); loadDashboard();
@@ -321,26 +377,26 @@
     window.addRecipients = async (id) => {
       const phone = prompt('Enter contact phone to add as recipient:');
       if(!phone) return;
-      const contacts = await fetch('/contacts/').then(r=>r.json());
+      const contacts = await api('/contacts/').then(r=>r.json());
       const match = contacts.find(c => c.phone === phone.trim());
       if(!match) return alert('Contact not found');
-      const res = await fetch(`/campaigns/${id}/recipients`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify([match.id]) });
+      const res = await api(`/campaigns/${id}/recipients`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify([match.id]) });
       const data = await res.json();
       alert(`Added ${data.added} recipient(s)`);
     };
 
     async function loadTemplates(){
-      const items = await fetch('/templates/').then(r=>r.json());
+      if(!requireAuth()) return;
+      const items = await api('/templates/').then(r=>r.json());
       $('template-list').innerHTML = items.map(t => `
         <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
-            <div>
-              <h3 style="margin:0;">${escape(t.name)}</h3>
-              <p class="muted" style="margin:6px 0 0;">${badge(t.status)} • ${escape(t.language)} • ${escape(t.category)}</p>
-              <p style="margin:8px 0 0;font-size:14px;">${escape(t.body)}</p>
-              ${t.header ? `<p class="muted" style="font-size:12px;margin-top:4px;">Header: ${escape(t.header)}</p>` : ''}
-              ${t.footer ? `<p class="muted" style="font-size:12px;">Footer: ${escape(t.footer)}</p>` : ''}
-            </div>
+          <div>
+            <h3 style="margin:0;">${escape(t.name)}</h3>
+            <p class="muted" style="margin:6px 0 0;">${badge(t.status)} • ${escape(t.language)} • ${escape(t.category)}</p>
+            <p style="margin:8px 0 0;font-size:14px;">${escape(t.body)}</p>
+            ${t.header ? `<p class="muted" style="font-size:12px;margin-top:4px;">Header: ${escape(t.header)}</p>` : ''}
+            ${t.footer ? `<p class="muted" style="font-size:12px;">Footer: ${escape(t.footer)}</p>` : ''}
+            ${t.error ? `<p class="muted" style="font-size:12px;color:#ef4444;">Error: ${escape(t.error)}</p>` : ''}
           </div>
         </div>
       `).join('');
@@ -350,20 +406,21 @@
     $('cancel-template').onclick = () => $('template-form').classList.add('hidden');
     $('save-template').onclick = async () => {
       const payload = { name: $('tpl-name').value, language: $('tpl-lang').value, category: $('tpl-cat').value, body: $('tpl-body').value, header: $('tpl-header').value || null, footer: $('tpl-footer').value || null };
-      await fetch('/templates/', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      await api('/templates/', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
       $('tpl-name').value=$('tpl-body').value=$('tpl-header').value=$('tpl-footer').value='';
       $('template-form').classList.add('hidden'); loadTemplates();
     };
     $('submit-template').onclick = async () => {
       const payload = { name: $('tpl-name').value, language: $('tpl-lang').value, category: $('tpl-cat').value, body: $('tpl-body').value, header: $('tpl-header').value || null, footer: $('tpl-footer').value || null };
-      const res = await fetch('/templates/submit-meta', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      const res = await api('/templates/submit-meta', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
       const data = await res.json();
       if(res.ok){ alert('Submitted to Meta!'); $('tpl-name').value=$('tpl-body').value=$('tpl-header').value=$('tpl-footer').value=''; $('template-form').classList.add('hidden'); loadTemplates(); }
       else { alert('Error: ' + JSON.stringify(data.detail||data)); }
     };
 
     async function loadSettings(){
-      const data = await fetch('/settings/whatsapp').then(r=>r.json());
+      if(!requireAuth()) return;
+      const data = await api('/settings/whatsapp').then(r=>r.json());
       $('cfg-phone').value = data.whatsapp_phone_number_id || '';
       $('cfg-token').value = data.whatsapp_access_token || '';
       $('cfg-ai-provider').value = data.ai_provider || '';
@@ -376,10 +433,38 @@
         ai_provider: $('cfg-ai-provider').value || null,
         ai_api_key: $('cfg-ai-key').value.trim() || null,
       };
-      await fetch('/settings/whatsapp', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      await api('/settings/whatsapp', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
       alert('Settings saved');
     };
     $('load-settings').onclick = loadSettings;
+
+    // Login / Register
+    $('do-login').onclick = async () => {
+      const key = $('login-key').value.trim(); if(!key) return alert('API key required');
+      clientApiKey = key; clientName = '';
+      localStorage.setItem('bws_api_key', clientApiKey); localStorage.setItem('bws_client_name', clientName);
+      show('dashboard');
+    };
+    $('do-register').onclick = async () => {
+      const name = $('reg-name').value.trim(); if(!name) return alert('Name required');
+      const res = await fetch('/auth/register', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name}) });
+      if(!res.ok) return alert('Registration failed');
+      const data = await res.json();
+      clientApiKey = data.api_key; clientName = data.name;
+      localStorage.setItem('bws_api_key', clientApiKey); localStorage.setItem('bws_client_name', clientName);
+      alert('Registered. Your API key: ' + clientApiKey);
+      show('dashboard');
+    };
+    $('logout').onclick = () => {
+      localStorage.removeItem('bws_api_key'); localStorage.removeItem('bws_client_name');
+      clientApiKey=''; clientName='';
+      show('login');
+    };
+    window.logout = () => {
+      localStorage.removeItem('bws_api_key'); localStorage.removeItem('bws_client_name');
+      clientApiKey=''; clientName='';
+      show('login');
+    };
 
     let aiContext = 'campaign';
     async function openAiModal(context){
@@ -406,13 +491,16 @@
 
     async function aiGenerate(prompt, context){
       const provider = $('cfg-ai-provider').value;
-      const res = await fetch('/ai/generate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prompt, context, provider }) });
+      const res = await api('/ai/generate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prompt, context, provider }) });
       const data = await res.json();
       if(!res.ok) throw new Error(data.detail || 'AI generation failed');
       return data.text;
     }
 
-    document.addEventListener('DOMContentLoaded', () => show('dashboard'));
+    document.addEventListener('DOMContentLoaded', () => {
+      if(clientApiKey){ show('dashboard'); }
+      else { show('login'); }
+    });
   </script>
-</body>
+
 </html>

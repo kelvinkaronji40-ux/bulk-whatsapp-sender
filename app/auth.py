@@ -1,7 +1,9 @@
-from fastapi import HTTPException, Security, FastAPI, Request, Depends
+from fastapi import HTTPException, Security, FastAPI, Request, Depends, APIRouter
 from fastapi.security import APIKeyHeader
+from fastapi import Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+import secrets
 
 from app.database import get_session
 from app.models import Client
@@ -16,3 +18,14 @@ async def get_current_client(request: Request, session: AsyncSession = Depends(g
     if not client:
         raise HTTPException(status_code=403, detail="Invalid API key")
     return client
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+@router.post("/register")
+async def register(name: str = Body(..., embed=True), session: AsyncSession = Depends(get_session)):
+    key = "bws_" + secrets.token_urlsafe(24)
+    client = Client(name=name, api_key=key)
+    session.add(client)
+    await session.commit()
+    await session.refresh(client)
+    return {"id": client.id, "name": client.name, "api_key": client.api_key}
