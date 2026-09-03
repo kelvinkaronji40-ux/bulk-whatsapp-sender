@@ -1,13 +1,14 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import asyncio
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import init_db, get_session_factory
-from app.routers import contacts, campaigns, templates, settings as settings_router, ai, internal
+from app.database import init_db, get_session, get_session_factory
+from app.routers import contacts, campaigns, templates, settings as settings_router, ai, internal, optouts
 from app.auth import router as auth_router
-from app.services import run_due_campaigns_on_startup
+from app.services import run_due_campaigns_on_startup, process_opt_out_webhook
 
 
 @asynccontextmanager
@@ -28,6 +29,14 @@ app.include_router(settings_router.router)
 app.include_router(ai.router)
 app.include_router(auth_router)
 app.include_router(internal.router)
+app.include_router(optouts.router)
+
+
+@app.post("/webhooks/whatsapp")
+async def whatsapp_webhook(request: Request, session: AsyncSession = Depends(get_session)):
+    body = await request.json()
+    result = await process_opt_out_webhook(session, body)
+    return result
 
 
 @app.get("/", response_class=HTMLResponse)

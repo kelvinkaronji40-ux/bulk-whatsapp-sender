@@ -49,6 +49,11 @@ async def init_db() -> None:
                 if "error" not in cols:
                     sync_conn.execute(text("ALTER TABLE templates ADD COLUMN error TEXT"))
                 sync_conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_templates_client_name ON templates(client_id, name)"))
+                cols_contacts = [r[1] for r in sync_conn.execute(text("PRAGMA table_info(contacts)")).fetchall()]
+                if "opted_out_at" not in cols_contacts:
+                    sync_conn.execute(text("ALTER TABLE contacts ADD COLUMN opted_out_at TIMESTAMP"))
+                sync_conn.execute(text("CREATE TABLE IF NOT EXISTS opt_outs (id INTEGER PRIMARY KEY AUTOINCREMENT, client_id INTEGER, contact_id INTEGER, reason TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"))
+                sync_conn.execute(text("CREATE INDEX IF NOT EXISTS ix_opt_outs_client_contact ON opt_outs(client_id, contact_id)"))
                 # Ensure a default client exists for single-tenant mode
                 row = sync_conn.execute(text("SELECT id FROM clients LIMIT 1")).fetchone()
                 if not row:

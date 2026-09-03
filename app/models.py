@@ -28,6 +28,17 @@ class Contact(Base):
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     source: Mapped[str | None] = mapped_column(String(255), nullable=True)
     opted_out: Mapped[bool] = mapped_column(Boolean, default=False)
+    opted_out_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class OptOut(Base):
+    __tablename__ = "opt_outs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), index=True)
+    contact_id: Mapped[int] = mapped_column(ForeignKey("contacts.id"), index=True)
+    reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.main import app
 from app.database import get_session
-from app.models import Base, Client
+from app.models import Base, Client, Contact
 from app.auth import get_current_client
 
 TEST_API_KEY = "test_api_key_123"
@@ -165,3 +165,18 @@ async def test_register_and_isolation(db_session: AsyncSession):
             assert len(r.json()) == 0
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_opt_out_flow(client: AsyncClient, db_session: AsyncSession):
+    from sqlalchemy import select as sa_select
+    r = await client.post("/contacts/", json={"phone": "254700000001", "name": "OptOut User", "source": "web"})
+    assert r.status_code == 201
+    contact = r.json()
+
+    r = await client.post("/opt-outs/", json={"contact_id": contact["id"]}, headers={"Content-Type":"application/json"})
+    assert r.status_code == 200
+
+    row = (await db_session.execute(sa_select(Contact).where(Contact.id == contact["id"]))).scalar_one()
+    assert row.opted_out is True
+    assert row.opted_out_at is not None

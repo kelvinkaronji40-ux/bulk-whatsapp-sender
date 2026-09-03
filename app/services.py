@@ -13,7 +13,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, load_settings_from_db
-from app.models import Campaign, CampaignContact, Contact
+from app.models import Campaign, CampaignContact, Contact, OptOut
 
 
 async def _get_settings(session: AsyncSession, client_id: int | None = None) -> Settings:
@@ -248,3 +248,34 @@ async def run_due_campaigns_on_startup(session_factory):
         )).scalars().all()
         for camp in due:
             await run_send_job(session, camp.id)
+
+
+async def process_opt_out_webhook(session: AsyncSession, payload: dict) -> dict:
+    changes = payload.get("changes", [])
+    for change in changes:
+        value = change.get("value", {})
+        if value.get("statuses"):
+            for status in value["statuses"]:
+                recipient = status.get("recipient_id") or status.get("to")
+                if not recipient:
+                    continue
+                contact = (await session.execute(select(Contact).where(Contact.phone == recipient))).scalar_one_or_none()
+                if not contact:
+                    continue
+                if status.get("status") == "read":
+                    pass
+        if value.get("messages"):
+            for message in value["messages"]:
+                text = message.get("text", {}).get("body", "").lower()
+                phone = message.get("from")
+                if not phone:
+                    continue
+                contact = (await session.execute(select(Contact).where(Contact.phone == phone))).scalar_one_or_none()
+                if not contact:
+                    continue
+                if any(t in text for t in ["stop", "unsubscribe", "opt out"]):
+                    contact.opted_out = True
+                    contact.opted_out_at = datetime.utcnow()
+                    session.add(OptOut(client_id=contact.client_id, contact_id=contact.id, reason=text[:255]))
+                    await session.commit()
+    return {"status": "ok"}

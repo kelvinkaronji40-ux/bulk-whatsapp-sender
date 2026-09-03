@@ -57,6 +57,7 @@
       <a onclick="show('contacts')" id="nav-contacts">Contacts</a>
       <a onclick="show('campaigns')" id="nav-campaigns">Campaigns</a>
       <a onclick="show('templates')" id="nav-templates">Templates</a>
+      <a onclick="show('opt-outs')" id="nav-opt-outs">Opt-outs</a>
       <a onclick="show('settings')" id="nav-settings">Settings</a>
       <a onclick="logout()" id="nav-logout" class="hidden">Logout</a>
     </nav>
@@ -230,6 +231,28 @@
       </div>
     </section>
 
+    <!-- Opt-outs -->
+    <section id="page-opt-outs" class="hidden">
+      <h1 class="section-title">Opt-outs</h1>
+      <p class="section-desc">Manage contacts who unsubscribed from WhatsApp messages</p>
+      <div class="card">
+        <div class="toolbar">
+          <input id="opt-phone" placeholder="Paste phone number to opt out manually" style="flex:1;min-width:180px;" />
+          <button class="btn" id="opt-out-btn">Opt Out</button>
+          <button class="btn btn-secondary" id="opt-in-btn">Opt In</button>
+        </div>
+        <p class="muted" style="font-size:12px;margin-top:8px;">Use this to enforce opt-outs manually. Inbound STOP messages are also caught automatically.</p>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 10px;">Opt-out Log</h3>
+        <table>
+          <thead><tr><th>Contact</th><th>Reason</th><th>Time</th></tr></thead>
+          <tbody id="opt-out-rows"></tbody>
+        </table>
+        <div id="opt-outs-empty" class="empty hidden">No opt-outs yet.</div>
+      </div>
+    </section>
+
     <!-- AI Modal -->
     <div id="ai-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:1000;">
       <div class="card" style="width:100%;max-width:520px;margin:0;">
@@ -267,7 +290,7 @@
     function escape(s){ if(typeof s!=='string') return ''; return s.replace(/[&<>'\\"]/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','\\'':'&#39;','"':'&quot;' }[m])); }
 
     function show(page){
-      ['dashboard','contacts','campaigns','templates','settings','login','register'].forEach(p => {
+      ['dashboard','contacts','campaigns','templates','settings','login','register','opt-outs'].forEach(p => {
         const el = $('page-'+p);
         if(el) el.classList.toggle('hidden', p!==page);
       });
@@ -281,6 +304,7 @@
       if(page==='campaigns') loadCampaigns();
       if(page==='templates') loadTemplates();
       if(page==='settings') loadSettings();
+      if(page==='opt-outs') loadOptOuts();
     }
 
     async function api(path, options={}){
@@ -437,6 +461,36 @@
       alert('Settings saved');
     };
     $('load-settings').onclick = loadSettings;
+
+    async function loadOptOuts(){
+      if(!requireAuth()) return;
+      const items = await api('/opt-outs/').then(r=>r.json());
+      $('opt-out-rows').innerHTML = items.map(item => `<tr><td>#${item.contact_id}</td><td>${escape(item.reason||'')}</td><td class="muted">${new Date(item.created_at).toLocaleString()}</td></tr>`).join('');
+      $('opt-outs-empty').classList.toggle('hidden', items.length>0);
+    }
+    $('opt-out-btn').onclick = async () => {
+      const phone = $('opt-phone').value.trim();
+      if(!phone) return alert('Enter phone');
+      const contacts = await api('/contacts/').then(r=>r.json());
+      const match = contacts.find(c => c.phone === phone);
+      if(!match) return alert('Contact not found');
+      const reason = prompt('Reason:') || '';
+      await api('/opt-outs/', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({contact_id: match.id, reason}) });
+      alert('Opted out');
+      $('opt-phone').value='';
+      loadOptOuts();
+    };
+    $('opt-in-btn').onclick = async () => {
+      const phone = $('opt-phone').value.trim();
+      if(!phone) return alert('Enter phone');
+      const contacts = await api('/contacts/').then(r=>r.json());
+      const match = contacts.find(c => c.phone === phone);
+      if(!match) return alert('Contact not found');
+      await api(`/opt-outs/${match.id}`, { method:'DELETE' });
+      alert('Opted in');
+      $('opt-phone').value='';
+      loadOptOuts();
+    };
 
     // Login / Register
     $('do-login').onclick = async () => {
