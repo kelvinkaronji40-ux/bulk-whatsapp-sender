@@ -24,10 +24,26 @@ class CampaignIn(BaseModel):
     scheduled_at: Optional[datetime] = None
 
 
+class CampaignMediaIn(BaseModel):
+    media_type: str = "image"
+    media_url: str
+    caption: Optional[str] = None
+    sort_order: int = 0
+
+
+class CampaignMediaOut(CampaignMediaIn):
+    id: int
+    campaign_id: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class CampaignOut(CampaignIn):
     id: int
     status: str
     created_at: datetime
+    media: list[CampaignMediaOut] = []
 
     model_config = ConfigDict(from_attributes=True)
 

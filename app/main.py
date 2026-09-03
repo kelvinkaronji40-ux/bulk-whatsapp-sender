@@ -6,7 +6,7 @@ import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import init_db, get_session, get_session_factory
-from app.routers import contacts, campaigns, templates, settings as settings_router, ai, internal, optouts
+from app.routers import contacts, campaigns, templates, settings as settings_router, ai, internal, optouts, campaign_media
 from app.auth import router as auth_router
 from app.services import run_due_campaigns_on_startup, process_opt_out_webhook
 
@@ -24,6 +24,7 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 app.include_router(contacts.router)
 app.include_router(campaigns.router)
+app.include_router(campaign_media.router)
 app.include_router(templates.router)
 app.include_router(settings_router.router)
 app.include_router(ai.router)

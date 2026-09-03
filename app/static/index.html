@@ -116,7 +116,7 @@
     <!-- Campaigns -->
     <section id="page-campaigns" class="hidden">
       <h1 class="section-title">Campaigns</h1>
-      <p class="section-desc">Create and send WhatsApp campaigns</p>
+      <p class="section-desc">Create and send WhatsApp campaigns with text, links, and media</p>
       <div class="toolbar">
         <button class="btn" id="new-campaign">+ New Campaign</button>
       </div>
@@ -124,8 +124,16 @@
         <h3 style="margin:0 0 10px;">New Campaign</h3>
         <div style="display:grid;gap:10px;margin-top:10px;">
           <input id="camp-name" placeholder="Campaign name" />
-          <textarea id="camp-body" placeholder="Message body or use a template..."></textarea>
+          <textarea id="camp-body" placeholder="Message body..."></textarea>
           <input id="camp-template" placeholder="Optional template name from Meta" />
+          <input id="camp-link" placeholder="Optional link URL to include in message" />
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <input id="camp-media-url" placeholder="Media URL (image/pdf)" />
+            <select id="camp-media-type">
+              <option value="image">Image</option>
+              <option value="document">Document</option>
+            </select>
+          </div>
           <input id="camp-scheduled" type="datetime-local" />
           <p class="muted" style="font-size:12px;margin-top:-6px;">Leave empty to save as draft. Pick a future time to schedule.</p>
         </div>

@@ -54,6 +54,8 @@ async def init_db() -> None:
                     sync_conn.execute(text("ALTER TABLE contacts ADD COLUMN opted_out_at TIMESTAMP"))
                 sync_conn.execute(text("CREATE TABLE IF NOT EXISTS opt_outs (id INTEGER PRIMARY KEY AUTOINCREMENT, client_id INTEGER, contact_id INTEGER, reason TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"))
                 sync_conn.execute(text("CREATE INDEX IF NOT EXISTS ix_opt_outs_client_contact ON opt_outs(client_id, contact_id)"))
+                sync_conn.execute(text("CREATE TABLE IF NOT EXISTS campaign_media (id INTEGER PRIMARY KEY AUTOINCREMENT, client_id INTEGER, campaign_id INTEGER, media_type TEXT DEFAULT 'image', media_url TEXT, caption TEXT, sort_order INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"))
+                sync_conn.execute(text("CREATE INDEX IF NOT EXISTS ix_campaign_media_campaign ON campaign_media(campaign_id)"))
                 # Ensure a default client exists for single-tenant mode
                 row = sync_conn.execute(text("SELECT id FROM clients LIMIT 1")).fetchone()
                 if not row:

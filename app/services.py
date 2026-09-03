@@ -13,7 +13,8 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, load_settings_from_db
-from app.models import Campaign, CampaignContact, Contact, OptOut
+from app.models import Campaign, CampaignContact, Contact, OptOut, CampaignMedia, Client
+from app.schemas import CampaignMediaIn
 
 
 async def _get_settings(session: AsyncSession, client_id: int | None = None) -> Settings:
@@ -46,7 +47,7 @@ def _normalize_phone(raw: str) -> str | None:
     return digits
 
 
-async def _send_whatsapp_text(session: AsyncSession, phone: str, body: str, client_id: int | None = None) -> tuple[bool, str | None]:
+async def _send_whatsapp_text(session: AsyncSession, phone: str, body: str, client_id: int | None = None, media: list[dict] | None = None) -> tuple[bool, str | None]:
     settings = await _get_settings(session, client_id=client_id)
     if not settings.whatsapp_phone_number_id or not settings.whatsapp_access_token:
         return False, "missing_whatsapp_config"
@@ -55,14 +56,39 @@ async def _send_whatsapp_text(session: AsyncSession, phone: str, body: str, clie
     text = body.rstrip()
     if not text.endswith("Tisement Media"):
         text += "\n\n- Powered by Tisement Media"
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": phone,
-        "type": "text",
-        "text": {"body": text},
-    }
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            if media:
+                for item in media:
+                    payload: dict[str, Any] = {
+                        "messaging_product": "whatsapp",
+                        "to": phone,
+                        "type": item.get("media_type", "image"),
+                    }
+                    mtype = item.get("media_type", "image")
+                    if mtype == "document":
+                        payload["document"] = {"link": item["media_url"]}
+                        if item.get("caption"):
+                            payload["document"]["caption"] = item["caption"]
+                    else:
+                        payload[mtype] = {"link": item["media_url"]}
+                        if item.get("caption"):
+                            payload[mtype]["caption"] = item["caption"]
+                    r = await client.post(url, json=payload, headers=headers)
+                    if r.status_code == 429 or r.status_code >= 500:
+                        for attempt in range(3):
+                            await asyncio.sleep(1.5 * (attempt + 1))
+                            r = await client.post(url, json=payload, headers=headers)
+                            if r.status_code < 400:
+                                break
+                    if r.status_code >= 400:
+                        return False, f"http_{r.status_code}: {r.text}"
+            payload = {
+                "messaging_product": "whatsapp",
+                "to": phone,
+                "type": "text",
+                "text": {"body": text, "preview_url": True},
+            }
             r = await client.post(url, json=payload, headers=headers)
             if r.status_code == 429 or r.status_code >= 500:
                 for attempt in range(3):
@@ -200,6 +226,13 @@ async def send_campaign(session: AsyncSession, campaign_id: int, client_id: int 
     if limit:
         q = q.limit(limit)
     rows = (await session.execute(q)).scalars().all()
+    media = (await session.execute(
+        select(CampaignMedia).where(CampaignMedia.campaign_id == campaign_id, CampaignMedia.client_id == client_id).order_by(CampaignMedia.sort_order.asc())
+    )).scalars().all()
+    media_payload = [
+        {"media_type": m.media_type, "media_url": m.media_url, "caption": m.caption}
+        for m in media
+    ]
     sent = 0
     failed = 0
     skipped = 0
@@ -210,7 +243,7 @@ async def send_campaign(session: AsyncSession, campaign_id: int, client_id: int 
             cc.error = "opted_out"
             skipped += 1
             continue
-        ok, err = await _send_whatsapp_text(session, contact.phone, campaign.body_text, client_id=client_id)
+        ok, err = await _send_whatsapp_text(session, contact.phone, campaign.body_text, client_id=client_id, media=media_payload)
         cc.sent_at = datetime.utcnow()
         if ok:
             cc.status = "sent"

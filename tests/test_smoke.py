@@ -180,3 +180,26 @@ async def test_opt_out_flow(client: AsyncClient, db_session: AsyncSession):
     row = (await db_session.execute(sa_select(Contact).where(Contact.id == contact["id"]))).scalar_one()
     assert row.opted_out is True
     assert row.opted_out_at is not None
+
+
+@pytest.mark.asyncio
+async def test_campaign_media_attach(client: AsyncClient, db_session: AsyncSession):
+    r = await client.post("/campaigns/", json={"name": "Media", "body_text": "Check this", "template_name": None, "client_id": 1})
+    assert r.status_code == 201
+    campaign_id = r.json()["id"]
+
+    r = await client.post(f"/campaigns/{campaign_id}/media", json={
+        "media_type": "image",
+        "media_url": "https://example.com/image.png",
+        "caption": "Image caption",
+        "sort_order": 0
+    })
+    assert r.status_code == 200
+    m = r.json()
+    assert m["media_type"] == "image"
+    assert m["media_url"] == "https://example.com/image.png"
+
+    r = await client.get(f"/campaigns/{campaign_id}/media")
+    assert r.status_code == 200
+    items = r.json()
+    assert len(items) == 1

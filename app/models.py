@@ -55,6 +55,19 @@ class Campaign(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class CampaignMedia(Base):
+    __tablename__ = "campaign_media"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), index=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id"), index=True)
+    media_type: Mapped[str] = mapped_column(String(32), default="image")
+    media_url: Mapped[str] = mapped_column(Text)
+    caption: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class CampaignContact(Base):
     __tablename__ = "campaign_contacts"
 
