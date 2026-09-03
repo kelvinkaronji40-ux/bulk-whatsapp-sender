@@ -5,21 +5,16 @@ from contextlib import asynccontextmanager
 import asyncio
 
 from app.database import init_db, get_session_factory
-from app.routers import contacts, campaigns, templates, settings as settings_router, ai
+from app.routers import contacts, campaigns, templates, settings as settings_router, ai, internal
 from app.auth import router as auth_router
-from app.services import scheduler_loop
+from app.services import run_due_campaigns_on_startup
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    task = asyncio.create_task(scheduler_loop(get_session_factory()))
+    await run_due_campaigns_on_startup(get_session_factory())
     yield
-    task.cancel()
-    try:
-        await task
-    except Exception:
-        pass
 
 
 app = FastAPI(title="Bulk WhatsApp Sender", version="0.1.0", lifespan=lifespan)
@@ -32,6 +27,7 @@ app.include_router(templates.router)
 app.include_router(settings_router.router)
 app.include_router(ai.router)
 app.include_router(auth_router)
+app.include_router(internal.router)
 
 
 @app.get("/", response_class=HTMLResponse)

@@ -236,20 +236,15 @@ async def run_send_job(session: AsyncSession, campaign_id: int) -> dict[str, int
     return await send_campaign(session, campaign_id)
 
 
-async def scheduler_loop(session_factory):
-    while True:
-        try:
-            async with session_factory() as session:
-                now = datetime.now(timezone.utc)
-                due = (await session.execute(
-                    select(Campaign).where(
-                        Campaign.scheduled_at != None,
-                        Campaign.status == "scheduled",
-                        Campaign.scheduled_at <= now,
-                    )
-                )).scalars().all()
-                for campaign in due:
-                    await run_send_job(session, campaign.id)
-        except Exception:
-            pass
-        await asyncio.sleep(30)
+async def run_due_campaigns_on_startup(session_factory):
+    async with session_factory() as session:
+        now = datetime.now(timezone.utc)
+        due = (await session.execute(
+            select(Campaign).where(
+                Campaign.scheduled_at != None,
+                Campaign.status == "scheduled",
+                Campaign.scheduled_at <= now,
+            )
+        )).scalars().all()
+        for camp in due:
+            await run_send_job(session, camp.id)
